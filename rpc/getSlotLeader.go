@@ -17,7 +17,7 @@ package rpc
 import (
 	"context"
 
-	"github.com/gagliardetto/solana-go"
+	"github.com/dojimanetwork/solana-go/v2"
 )
 
 // GetSlotLeader returns the current slot leader.

@@ -20,8 +20,8 @@ package serum
 import (
 	"math/big"
 
-	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/programs/token"
+	"github.com/dojimanetwork/solana-go/v2"
+	"github.com/dojimanetwork/solana-go/v2/programs/token"
 )
 
 type MarketMeta struct {

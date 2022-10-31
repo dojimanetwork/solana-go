@@ -18,9 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/rpc"
-	"github.com/gagliardetto/solana-go/rpc/ws"
+	"github.com/dojimanetwork/solana-go/v2"
+	"github.com/dojimanetwork/solana-go/v2/rpc"
+	"github.com/dojimanetwork/solana-go/v2/rpc/ws"
 )
 
 // Send and wait for confirmation of a transaction.
@@ -31,7 +31,7 @@ func SendAndConfirmTransaction(
 	transaction *solana.Transaction,
 ) (signature solana.Signature, err error) {
 	opts := rpc.TransactionOpts{
-		SkipPreflight: false,
+		SkipPreflight:       false,
 		PreflightCommitment: rpc.CommitmentFinalized,
 	}
 

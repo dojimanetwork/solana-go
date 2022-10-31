@@ -23,9 +23,9 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/programs/serum"
-	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/dojimanetwork/solana-go/v2"
+	"github.com/dojimanetwork/solana-go/v2/programs/serum"
+	"github.com/dojimanetwork/solana-go/v2/rpc"
 	"github.com/ryanuber/columnize"
 	"github.com/spf13/cobra"
 )

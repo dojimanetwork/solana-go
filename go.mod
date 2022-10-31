@@ -1,4 +1,4 @@
-module github.com/gagliardetto/solana-go
+module github.com/dojimanetwork/solana-go/v2
 
 go 1.16
 
@@ -10,12 +10,12 @@ require (
 
 require (
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.4 // indirect
-	filippo.io/edwards25519 v1.0.0-rc.1
 	github.com/AlekSi/pointer v1.1.0
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/aybabtme/rgbterm v0.0.0-20170906152045-cc83f3b3ce59
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
+	github.com/dojimanetwork/edwards25519/v2 v2.0.2
 	github.com/fatih/color v1.9.0
 	github.com/google/go-cmp v0.5.1
 	github.com/gorilla/rpc v1.2.0
@@ -24,7 +24,6 @@ require (
 	github.com/klauspost/compress v1.13.6
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/magiconair/properties v1.8.1
-	github.com/mostynb/zstdpool-freelist v0.0.0-20201229113212-927304c0c3b1
 	github.com/mr-tron/base58 v1.2.0
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1

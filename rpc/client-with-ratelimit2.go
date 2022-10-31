@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gagliardetto/solana-go/rpc/jsonrpc"
+	"github.com/dojimanetwork/solana-go/v2/rpc/jsonrpc"
 	"golang.org/x/time/rate"
 )
 

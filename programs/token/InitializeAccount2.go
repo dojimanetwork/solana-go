@@ -17,9 +17,9 @@ package token
 import (
 	"errors"
 
+	ag_solanago "github.com/dojimanetwork/solana-go/v2"
+	ag_format "github.com/dojimanetwork/solana-go/v2/text/format"
 	ag_binary "github.com/gagliardetto/binary"
-	ag_solanago "github.com/gagliardetto/solana-go"
-	ag_format "github.com/gagliardetto/solana-go/text/format"
 	ag_treeout "github.com/gagliardetto/treeout"
 )
 

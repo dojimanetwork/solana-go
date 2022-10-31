@@ -21,8 +21,8 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/dojimanetwork/solana-go/v2/text"
 	bin "github.com/gagliardetto/binary"
-	"github.com/gagliardetto/solana-go/text"
 	"github.com/gagliardetto/treeout"
 )
 

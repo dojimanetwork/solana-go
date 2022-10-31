@@ -18,10 +18,10 @@ import (
 	"context"
 
 	"github.com/davecgh/go-spew/spew"
+	solana "github.com/dojimanetwork/solana-go/v2"
+	"github.com/dojimanetwork/solana-go/v2/programs/token"
+	"github.com/dojimanetwork/solana-go/v2/rpc"
 	bin "github.com/gagliardetto/binary"
-	solana "github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/programs/token"
-	"github.com/gagliardetto/solana-go/rpc"
 )
 
 func main() {

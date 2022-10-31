@@ -29,7 +29,7 @@ import (
 	"math"
 	"sort"
 
-	"filippo.io/edwards25519"
+	"github.com/dojimanetwork/edwards25519/v2"
 	"github.com/mr-tron/base58"
 )
 
