@@ -1,6 +1,6 @@
 # Solana SDK library for Go
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/gagliardetto/solana-go?status.svg)](https://pkg.go.dev/github.com/gagliardetto/solana-go@v1.7.1?tab=doc)
+[![GoDoc](https://pkg.go.dev/badge/github.com/gagliardetto/solana-go?status.svg)](https://pkg.go.dev/github.com/gagliardetto/solana-go@v1.11.0?tab=doc)
 [![GitHub tag (latest SemVer pre-release)](https://img.shields.io/github/v/tag/gagliardetto/solana-go?include_prereleases&label=release-tag)](https://github.com/gagliardetto/solana-go/releases)
 [![Build Status](https://github.com/gagliardetto/solana-go/workflows/tests/badge.svg?branch=main)](https://github.com/gagliardetto/solana-go/actions?query=branch%3Amain)
 [![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/gagliardetto/solana-go/main)](https://www.tickgit.com/browse?repo=github.com/gagliardetto/solana-go&branch=main)
@@ -22,7 +22,7 @@ More contracts to come.
 
 `solana-go` is exclusively supported by my own time (which is money).
 
-If my work has been useful in building your for-profit services/infra/bots/etc., consider donating at DkP56dVfmTTN58oy6hDpRLtw4RMEFMmEWs8umN3Kg8vp (solana) to support future development.
+If my work has been useful in building your for-profit services/infra/bots/etc., consider donating at 8tTwBazKr2ST1b2kNrM7JMXwixRTvZicn7eRBihThymm (solana) to support future development.
 
 Thanks!
 
@@ -36,6 +36,7 @@ Thanks!
   - [Installation](#installation)
   - [Pretty-Print transactions/instructions](#pretty-print-transactionsinstructions)
   - [SendAndConfirmTransaction](#sendandconfirmtransaction)
+  - [Address Lookup Tables](#address-lookup-tables)
   - [Decode an instruction data](#parsedecode-an-instruction-from-a-transaction)
   - [Borsh encoding/decoding](#borsh-encodingdecoding)
   - [ZSTD account data encoding](#zstd-account-data-encoding)
@@ -68,7 +69,7 @@ Thanks!
 - [ ] Clients for Solana Program Library (SPL)
   - [x] [SPL token](/programs/token)
   - [x] [associated-token-account](/programs/associated-token-account)
-  - [ ] memo
+  - [x] memo
   - [ ] name-service
   - [ ] ...
 - [ ] Client for Serum
@@ -82,7 +83,7 @@ Thanks!
 
 ## Current development status
 
-There is currently **no stable release**. The SDK is actively developed and latest is `v1.7.1` which is an `alpha` release.
+There is currently **no stable release**. The SDK is actively developed and latest is `v1.11.0` which is an `alpha` release.
 
 The RPC and WS client implementation is based on [this RPC spec](https://github.com/solana-labs/solana/blob/c2435363f39723cef59b91322f3b6a815008af29/docs/src/developing/clients/jsonrpc-api.md).
 
@@ -93,13 +94,13 @@ The RPC and WS client implementation is based on [this RPC spec](https://github.
 
 ## Requirements
 
-- Go 1.16 or later
+- Go 1.18 or later
 
 ## Installation
 
 ```bash
 $ cd my-project
-$ go get github.com/gagliardetto/solana-go@v1.7.1
+$ go get github.com/gagliardetto/solana-go@v1.11.0
 ```
 
 ## Pretty-Print transactions/instructions
@@ -149,6 +150,108 @@ spew.Dump(sig)
 
 The above command will send the transaction, and wait for its confirmation.
 
+## Address Lookup Tables
+
+Resolve lookups for a transaction:
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/gagliardetto/solana-go"
+	lookup "github.com/gagliardetto/solana-go/programs/address-lookup-table"
+	"github.com/gagliardetto/solana-go/rpc"
+	"golang.org/x/time/rate"
+)
+
+func main() {
+	cluster := rpc.MainNetBeta
+
+	rpcClient := rpc.NewWithCustomRPCClient(rpc.NewWithLimiter(
+		cluster.RPC,
+		rate.Every(time.Second), // time frame
+		5,                       // limit of requests per time frame
+	))
+
+	version := uint64(0)
+	tx, err := rpcClient.GetTransaction(
+		context.Background(),
+		solana.MustSignatureFromBase58("24jRjMP3medE9iMqVSPRbkwfe9GdPmLfeftKPuwRHZdYTZJ6UyzNMGGKo4BHrTu2zVj4CgFF3CEuzS79QXUo2CMC"),
+		&rpc.GetTransactionOpts{
+			MaxSupportedTransactionVersion: &version,
+			Encoding:                       solana.EncodingBase64,
+		},
+	)
+	if err != nil {
+		panic(err)
+	}
+	parsed, err := tx.Transaction.GetTransaction()
+	if err != nil {
+		panic(err)
+	}
+	processTransactionWithAddressLookups(parsed, rpcClient)
+}
+
+func processTransactionWithAddressLookups(txx *solana.Transaction, rpcClient *rpc.Client) {
+	if !txx.Message.IsVersioned() {
+		fmt.Println("tx is not versioned; only versioned transactions can contain lookups")
+		return
+	}
+	tblKeys := txx.Message.GetAddressTableLookups().GetTableIDs()
+	if len(tblKeys) == 0 {
+		fmt.Println("no lookup tables in versioned transaction")
+		return
+	}
+	numLookups := txx.Message.GetAddressTableLookups().NumLookups()
+	if numLookups == 0 {
+		fmt.Println("no lookups in versioned transaction")
+		return
+	}
+	fmt.Println("num lookups:", numLookups)
+	fmt.Println("num tbl keys:", len(tblKeys))
+	resolutions := make(map[solana.PublicKey]solana.PublicKeySlice)
+	for _, key := range tblKeys {
+		fmt.Println("Getting table", key)
+
+		info, err := rpcClient.GetAccountInfo(
+			context.Background(),
+			key,
+		)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("got table "+key.String())
+
+		tableContent, err := lookup.DecodeAddressLookupTableState(info.GetBinary())
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println("table content:", spew.Sdump(tableContent))
+		fmt.Println("isActive", tableContent.IsActive())
+
+		resolutions[key] = tableContent.Addresses
+	}
+
+	err := txx.Message.SetAddressTables(resolutions)
+	if err != nil {
+		panic(err)
+	}
+
+	err = txx.Message.ResolveLookups()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(txx.String())
+}
+```
+
+
 ## Parse/decode an instruction from a transaction
 
 ```go
@@ -193,7 +296,7 @@ func exampleFromGetTransaction() {
   endpoint := rpc.TestNet_RPC
   client := rpc.New(endpoint)
 
-  txSig := solana.MustSignatureFromBase58("3pByJJ2ff7EQANKd2bgetmnYQxknk3QUib1xLMnrg6aCvg5hS78peaGMoceC9AFckomqrsgo38DpzrG2LPW9zj3g")
+  txSig := solana.MustSignatureFromBase58("3hZorctJtD3QLCRV3zF6JM6FDbFR5kAvsuKEG1RH9rWdz8YgnDzAvMWZFjdJgoL8KSNzZnx7aiExm1JEMC8KHfyy")
   {
     out, err := client.GetTransaction(
       context.TODO(),
@@ -224,12 +327,15 @@ func decodeSystemTransfer(tx *solana.Transaction) {
 
   // Find the program address of this instruction:
   progKey, err := tx.ResolveProgramIDIndex(i0.ProgramIDIndex)
-  if if err != nil {
+  if err != nil {
     panic(err)
   }
 
-  // FInd the accounts of this instruction:
-  accounts := i0.ResolveInstructionAccounts(&tx.Message)
+  // Find the accounts of this instruction:
+  accounts, err := i0.ResolveInstructionAccounts(&tx.Message)
+  if err != nil {
+    panic(err)
+  }
 
   // Feed the accounts and data to the system program parser
   // OR see below for alternative parsing when you DON'T know
@@ -297,7 +403,7 @@ Decoder:
     panic(err)
   }
 
-  borshDec := bin.NewBorshDecoder(resp.Value.Data.GetBinary())
+  borshDec := bin.NewBorshDecoder(resp.GetBinary())
   var meta token_metadata.Metadata
   err = borshDec.Decode(&meta)
   if err != nil {
@@ -336,7 +442,7 @@ if err != nil {
 spew.Dump(resp)
 
 var mint token.Mint
-err = bin.NewDecoder(resp.Value.Data.GetBinary()).Decode(&mint)
+err = bin.NewDecoder(resp.GetBinary()).Decode(&mint)
 if err != nil {
   panic(err)
 }
@@ -358,11 +464,11 @@ import (
 
 func main() {
   cluster := rpc.MainNetBeta
-  client := rpc.NewWithLimiter(
-    cluster.RPC,
-    rate.Every(time.Second), // time frame
-    5, // limit of requests per time frame
-  )
+  client := rpc.NewWithCustomRPCClient(rpc.NewWithLimiter(
+		cluster.RPC,
+		rate.Every(time.Second), // time frame
+		5,                       // limit of requests per time frame
+	))
 
   out, err := client.GetVersion(
     context.TODO(),
@@ -406,7 +512,7 @@ func main() {
 }
 ```
 
-The data will **AUTOMATICALLY get decoded** and returned (**the right decoder will be used**) when you call the `resp.Value.Data.GetBinary()` method.
+The data will **AUTOMATICALLY get decoded** and returned (**the right decoder will be used**) when you call the `resp.GetBinary()` method.
 
 ## Timeouts and Custom HTTP Clients
 
@@ -513,7 +619,7 @@ func main() {
   // Create a new RPC client:
   client := rpc.New(rpc.TestNet_RPC)
 
-  // Airdrop 5 SOL to the new account:
+  // Airdrop 1 SOL to the new account:
   out, err := client.RequestAirdrop(
     context.TODO(),
     account.PublicKey(),
@@ -641,7 +747,7 @@ func main() {
   amount := uint64(3333)
 
   if true {
-    // Airdrop 5 sol to the account so it will have something to transfer:
+    // Airdrop 1 sol to the account so it will have something to transfer:
     out, err := rpcClient.RequestAirdrop(
       context.TODO(),
       accountFrom.PublicKey(),
@@ -769,6 +875,7 @@ func main() {
     - To be used with **solana v1.8**
     - For solana v1.9 or newer: **DEPRECATED: Please use [GetLatestBlockhash](#index--rpc--getlatestblockhash) instead** (This method is expected to be removed in **solana-core v2.0**)
   - [GetRecentPerformanceSamples](#index--rpc--getrecentperformancesamples)
+  - [GetRecentPrioritizationFees](#index--rpc--getrecentprioritizationfees)
   - [GetSignatureStatuses](#index--rpc--getsignaturestatuses)
   - [GetSignaturesForAddress](#index--rpc--getsignaturesforaddress)
   - [GetSlot](#index--rpc--getslot)
@@ -837,7 +944,7 @@ func main() {
     var mint token.Mint
     // Account{}.Data.GetBinary() returns the *decoded* binary data
     // regardless the original encoding (it can handle them all).
-    err = bin.NewDecoder(resp.Value.Data.GetBinary()).Decode(&mint)
+    err = bin.NewDecoder(resp.GetBinary()).Decode(&mint)
     if err != nil {
       panic(err)
     }
@@ -899,7 +1006,7 @@ func main() {
     spew.Dump(resp)
 
     var mint token.Mint
-    err = bin.NewDecoder(resp.Value.Data.GetBinary()).Decode(&mint)
+    err = bin.NewDecoder(resp.GetBinary()).Decode(&mint)
     if err != nil {
       panic(err)
     }
@@ -2115,7 +2222,6 @@ func main() {
   spew.Dump(recent)
 }
 ```
-
 #### [index](#contents) > [RPC](#rpc-methods) > GetRecentPerformanceSamples
 
 ```go
@@ -2136,6 +2242,36 @@ func main() {
   out, err := client.GetRecentPerformanceSamples(
     context.TODO(),
     &limit,
+  )
+  if err != nil {
+    panic(err)
+  }
+  spew.Dump(out)
+}
+```
+
+#### [index](#contents) > [RPC](#rpc-methods) > GetRecentPrioritizationFees
+
+```go
+package main
+
+import (
+  "context"
+
+  "github.com/davecgh/go-spew/spew"
+  "github.com/gagliardetto/solana-go"
+  "github.com/gagliardetto/solana-go/rpc"
+)
+
+func main() {
+  endpoint := rpc.TestNet_RPC
+  client := rpc.New(endpoint)
+
+  out, err := client.GetRecentPrioritizationFees(
+    context.TODO(),
+    []solana.PublicKey{
+      solana.MustPublicKeyFromBase58("q5BgreVhTyBH1QCeriVb7kQYEPneanFXPLjvyjdf8M3"),
+    },
   )
   if err != nil {
     panic(err)

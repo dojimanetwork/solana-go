@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	stdjson "encoding/json"
 	"fmt"
+	"math/big"
 	"testing"
 
 	"github.com/AlekSi/pointer"
@@ -34,7 +35,7 @@ import (
 )
 
 func TestClient_GetAccountInfo(t *testing.T) {
-	responseBody := `{"context":{"slot":83986105},"value":{"data":["dGVzdA==","base64"],"executable":true,"lamports":999999,"owner":"11111111111111111111111111111111","rentEpoch":207}}`
+	responseBody := `{"context":{"slot":83986105},"value":{"data":["dGVzdA==","base64"],"executable":true,"lamports":999999,"owner":"11111111111111111111111111111111","rentEpoch":18446744073709551615}}`
 	server, closer := mockJSONRPC(t, stdjson.RawMessage(wrapIntoRPC(responseBody)))
 	defer closer()
 	client := New(server.URL)
@@ -44,9 +45,14 @@ func TestClient_GetAccountInfo(t *testing.T) {
 	out, err := client.GetAccountInfo(context.Background(), pubKey)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getAccountInfo",
 			"params": []interface{}{
@@ -56,9 +62,10 @@ func TestClient_GetAccountInfo(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
+	rentEpoch, _ := new(big.Int).SetString("18446744073709551615", 10)
 	assert.Equal(t,
 		&GetAccountInfoResult{
 			RPCContext: RPCContext{
@@ -75,7 +82,7 @@ func TestClient_GetAccountInfo(t *testing.T) {
 					},
 				},
 				Executable: true,
-				RentEpoch:  207,
+				RentEpoch:  rentEpoch,
 			},
 		}, out)
 }
@@ -109,9 +116,14 @@ func TestClient_GetAccountInfoWithOpts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getAccountInfo",
 			"params": []interface{}{
@@ -127,12 +139,12 @@ func TestClient_GetAccountInfoWithOpts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 }
 
 func TestClient_GetConfirmedSignaturesForAddress2(t *testing.T) {
-	server, closer := mockJSONRPC(t, stdjson.RawMessage(`{"jsonrpc":"2.0","result":[{"err":null,"memo":null,"signature":"mgw5vw4tnbou1wVStKckVcVncbpRwfZPcMNbVBoigbSPXBMa3857CNzhwoCkRzM5K7nG32wcbpVJDHttQeBRaHB","slot":1}],"id":0}`))
+	server, closer := mockJSONRPC(t, stdjson.RawMessage(`{"jsonrpc":"2.0","result":[{"err":null,"memo":null,"signature":"mgw5vw4tnbou1wVStKckVcVncbpRwfZPcMNbVBoigbSPXBMa3857CNzhwoCkRzM5K7nG32wcbpVJDHttQeBRaHB","slot":1}],"id":null}`))
 	defer closer()
 	client := New(server.URL)
 
@@ -141,16 +153,22 @@ func TestClient_GetConfirmedSignaturesForAddress2(t *testing.T) {
 	out, err := client.GetConfirmedSignaturesForAddress2(context.Background(), account, &GetConfirmedSignaturesForAddress2Opts{Limit: &limit})
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getConfirmedSignaturesForAddress2",
 			"params": []interface{}{
 				"H7ATJQGhwG8Uf8sUntUognFpsKixPy2buFnXkvyNbGUb",
 				map[string]interface{}{"limit": float64(1)},
-			}},
-		server.RequestBody(t),
+			},
+		},
+		reqBody,
 	)
 
 	expected := []*TransactionSignature{
@@ -161,7 +179,7 @@ func TestClient_GetConfirmedSignaturesForAddress2(t *testing.T) {
 }
 
 func TestClient_GetConfirmedTransaction(t *testing.T) {
-	server, closer := mockJSONRPC(t, stdjson.RawMessage(`{"jsonrpc":"2.0","result":{"meta":{"err":null,"fee":5000,"innerInstructions":[],"logMessages":[],"postBalances":[],"preBalances":[],"status":{"Ok":null}},"slot":48291656,"transaction":["AcpmPgtaSCzI2vuOUXduljmnoc1zIqMETzEJ8zmF+\/yy2AABHMNonpVleveVw4a4Fo7LUDWtxo2FkyzFr2x9DQIBAAMB47aX3y9Dfp+\/ycSDXt0Ph3TfZQBqPSXMQYToKtUtr5kNhniVeV7Las6qkeV8d0rksxV9de0GF7p4nzQUVEnrWwEEBAECAwAEdGVzdA==","base64"]},"id":0}`))
+	server, closer := mockJSONRPC(t, stdjson.RawMessage(`{"jsonrpc":"2.0","result":{"meta":{"err":null,"fee":5000,"innerInstructions":[],"logMessages":[],"postBalances":[],"preBalances":[],"status":{"Ok":null}},"slot":48291656,"transaction":["AcpmPgtaSCzI2vuOUXduljmnoc1zIqMETzEJ8zmF+\/yy2AABHMNonpVleveVw4a4Fo7LUDWtxo2FkyzFr2x9DQIBAAMB47aX3y9Dfp+\/ycSDXt0Ph3TfZQBqPSXMQYToKtUtr5kNhniVeV7Las6qkeV8d0rksxV9de0GF7p4nzQUVEnrWwEEBAECAwAEdGVzdA==","base64"]},"id":null}`))
 	defer closer()
 	client := New(server.URL)
 
@@ -171,9 +189,14 @@ func TestClient_GetConfirmedTransaction(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getConfirmedTransaction",
 			"params": []interface{}{
@@ -181,7 +204,7 @@ func TestClient_GetConfirmedTransaction(t *testing.T) {
 				"json",
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	signature, err := solana.SignatureFromBase58("53hoZ98EsCMA6L63GWM65M3Bd3WqA4LxD8bcJkbKoKWhbJFqX9M1WZ4fSjt8bYyZn21NwNnV2A25zirBni9Qk6LR")
@@ -264,9 +287,14 @@ func TestClient_GetRecentBlockhash(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getRecentBlockhash",
 			"params": []interface{}{
@@ -275,7 +303,7 @@ func TestClient_GetRecentBlockhash(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -301,9 +329,14 @@ func TestClient_GetBalance(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBalance",
 			"params": []interface{}{
@@ -313,7 +346,7 @@ func TestClient_GetBalance(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	assert.Equal(t,
@@ -339,9 +372,14 @@ func TestClient_GetBlock(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlock",
 			"params": []interface{}{
@@ -351,7 +389,7 @@ func TestClient_GetBlock(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	// TODO:
@@ -506,9 +544,14 @@ func TestClient_GetBlockWithOpts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlock",
 			"params": []interface{}{
@@ -522,7 +565,7 @@ func TestClient_GetBlockWithOpts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	// TODO:
@@ -541,9 +584,14 @@ func TestClient_GetBlockHeight(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlockHeight",
 			"params": []interface{}{
@@ -552,7 +600,7 @@ func TestClient_GetBlockHeight(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -573,14 +621,19 @@ func TestClient_GetBlockProduction(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlockProduction",
 			"params":  []interface{}{},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -614,9 +667,14 @@ func TestClient_GetBlockProductionWithOpts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlockProduction",
 			"params": []interface{}{
@@ -630,7 +688,7 @@ func TestClient_GetBlockProductionWithOpts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 }
 
@@ -648,52 +706,58 @@ func TestClient_GetBlockCommitment(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlockCommitment",
 			"params": []interface{}{
 				float64(block),
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
-	expected := map[string]interface{}{"commitment": []interface{}{
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("0"),
-		stdjson.Number("44854495719374"),
-		stdjson.Number("0"),
-		stdjson.Number("51599979318189"),
-		stdjson.Number("5070972605440"),
-		stdjson.Number("140323113958535"),
-		stdjson.Number("169550804919131"),
-		stdjson.Number("272061505737107"),
-		stdjson.Number("860587424880950"),
-		stdjson.Number("1374732609383053"),
-		stdjson.Number("2334359721325133"),
-		stdjson.Number("4664454087479672"),
-		stdjson.Number("10122947678661428"),
-		stdjson.Number("52107037802932750"),
-	},
+	expected := map[string]interface{}{
+		"commitment": []interface{}{
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("0"),
+			stdjson.Number("44854495719374"),
+			stdjson.Number("0"),
+			stdjson.Number("51599979318189"),
+			stdjson.Number("5070972605440"),
+			stdjson.Number("140323113958535"),
+			stdjson.Number("169550804919131"),
+			stdjson.Number("272061505737107"),
+			stdjson.Number("860587424880950"),
+			stdjson.Number("1374732609383053"),
+			stdjson.Number("2334359721325133"),
+			stdjson.Number("4664454087479672"),
+			stdjson.Number("10122947678661428"),
+			stdjson.Number("52107037802932750"),
+		},
 		"totalStake": stdjson.Number("73611541921665680"),
 	}
 
@@ -718,9 +782,14 @@ func TestClient_GetBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlocks",
 			"params": []interface{}{
@@ -731,7 +800,7 @@ func TestClient_GetBlocks(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -757,9 +826,14 @@ func TestClient_GetBlocksWithLimit(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlocksWithLimit",
 			"params": []interface{}{
@@ -770,7 +844,7 @@ func TestClient_GetBlocksWithLimit(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -793,16 +867,21 @@ func TestClient_GetBlockTime(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getBlockTime",
 			"params": []interface{}{
 				float64(block),
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -813,7 +892,7 @@ func TestClient_GetBlockTime(t *testing.T) {
 }
 
 func TestClient_GetClusterNodes(t *testing.T) {
-	responseBody := `[{"featureSet":743297851,"gossip":"162.55.111.250:8001","pubkey":"DMeohMfD3JzmYZA34jL9iiTXp5N7tpAR3rAoXMygdH3U","rpc":"135.181.114.15:8005","shredVersion":18122,"tpu":"162.55.111.250:8004","version":"1.7.3"},{"featureSet":743297851,"gossip":"136.243.131.82:8000","pubkey":"59TSbYfnbb4zx4xf54ApjE8fJRhwzTiSjh9vdHfgyg1U","rpc":"136.243.131.82:8899","shredVersion":18122,"tpu":"136.243.131.82:8003","version":"1.7.3"},{"featureSet":743297851,"gossip":"135.181.114.15:8001","pubkey":"7vu7Q2d4uu9V4xnySHXieeyWvoNh37321kqTd2ATuoj6","rpc":"135.181.114.15:8005","shredVersion":18122,"tpu":"135.181.114.15:8006","version":"1.7.3"}]`
+	responseBody := `[{"featureSet":3580551090,"gossip":"34.147.255.155:8000","pubkey":"hyp3Eo67t6FgeuWg5Qxbeme8NPXJPXXdKT4iJ4DsLf2","pubsub":"34.147.255.155:8900","rpc":"34.147.255.155:8899","shredVersion":50093,"tpu":"34.147.255.155:8009","tpuQuic":"34.147.255.155:8015","version":"1.17.22"},{"featureSet":3746964731,"gossip":"162.19.222.39:8001","pubkey":"EvnRmnMrd69kFdbLMxWkTn1icZ7DCceRhvmb2SJXqDo4","pubsub":"162.19.222.39:8900","rpc":"162.19.222.39:8899","shredVersion":50093,"tpu":"208.91.106.87:8005","tpuQuic":"208.91.106.87:8011","version":"1.17.27"},{"featureSet":3746964731,"gossip":"205.209.104.74:8000","pubkey":"J87afqF2bDQQLTQpks4SdF7hXPr96SPTdJ28UJXXWr9N","pubsub":"205.209.104.74:8900","rpc":"205.209.104.74:8899","shredVersion":50093,"tpu":"205.209.104.74:8003","tpuQuic":"205.209.104.74:8009","version":"1.17.27"}]`
 	server, closer := mockJSONRPC(t, stdjson.RawMessage(wrapIntoRPC(responseBody)))
 	defer closer()
 	client := New(server.URL)
@@ -823,13 +902,18 @@ func TestClient_GetClusterNodes(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getClusterNodes",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -851,9 +935,14 @@ func TestClient_GetEpochInfo(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getEpochInfo",
 			"params": []interface{}{
@@ -862,7 +951,7 @@ func TestClient_GetEpochInfo(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := map[string]interface{}{
@@ -890,13 +979,18 @@ func TestClient_GetEpochSchedule(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getEpochSchedule",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -919,9 +1013,14 @@ func TestClient_GetFeeCalculatorForBlockhash(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getFeeCalculatorForBlockhash",
 			"params": []interface{}{
@@ -931,7 +1030,7 @@ func TestClient_GetFeeCalculatorForBlockhash(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -952,13 +1051,18 @@ func TestClient_GetFeeRateGovernor(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getFeeRateGovernor",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -980,9 +1084,14 @@ func TestClient_GetFees(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getFees",
 			"params": []interface{}{
@@ -991,7 +1100,7 @@ func TestClient_GetFees(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1012,13 +1121,18 @@ func TestClient_GetFirstAvailableBlock(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getFirstAvailableBlock",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1039,13 +1153,18 @@ func TestClient_GetGenesisHash(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getGenesisHash",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1066,13 +1185,18 @@ func TestClient_GetHealth(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getHealth",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1093,13 +1217,18 @@ func TestClient_GetIdentity(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getIdentity",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1121,9 +1250,14 @@ func TestClient_GetInflationGovernor(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getInflationGovernor",
 			"params": []interface{}{
@@ -1132,7 +1266,7 @@ func TestClient_GetInflationGovernor(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1153,13 +1287,18 @@ func TestClient_GetInflationRate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getInflationRate",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1194,9 +1333,14 @@ func TestClient_GetInflationReward(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getInflationReward",
 			"params": []interface{}{
@@ -1209,7 +1353,7 @@ func TestClient_GetInflationReward(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1233,9 +1377,14 @@ func TestClient_GetLargestAccounts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getLargestAccounts",
 			"params": []interface{}{
@@ -1245,7 +1394,7 @@ func TestClient_GetLargestAccounts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := &GetLargestAccountsResult{
@@ -1362,9 +1511,14 @@ func TestClient_GetLeaderSchedule(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getLeaderSchedule",
 			"params": []interface{}{
@@ -1375,7 +1529,7 @@ func TestClient_GetLeaderSchedule(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1396,13 +1550,18 @@ func TestClient_GetMaxRetransmitSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getMaxRetransmitSlot",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1423,13 +1582,18 @@ func TestClient_GetMaxShredInsertSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getMaxShredInsertSlot",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1453,9 +1617,14 @@ func TestClient_GetMinimumBalanceForRentExemption(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getMinimumBalanceForRentExemption",
 			"params": []interface{}{
@@ -1465,7 +1634,7 @@ func TestClient_GetMinimumBalanceForRentExemption(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1489,16 +1658,21 @@ func TestClient_GetMultipleAccounts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getMultipleAccounts",
 			"params": []interface{}{
 				[]interface{}{pubkeyString},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := &GetMultipleAccountsResult{
@@ -1519,7 +1693,7 @@ func TestClient_GetMultipleAccounts(t *testing.T) {
 					rawDataEncoding: solana.EncodingBase64,
 				},
 				Executable: true,
-				RentEpoch:  207,
+				RentEpoch:  big.NewInt(207),
 			},
 		},
 	}
@@ -1562,9 +1736,14 @@ func TestClient_GetProgramAccounts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getProgramAccounts",
 			"params": []interface{}{
@@ -1587,7 +1766,7 @@ func TestClient_GetProgramAccounts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := GetProgramAccountsResult{
@@ -1604,7 +1783,7 @@ func TestClient_GetProgramAccounts(t *testing.T) {
 					rawDataEncoding: solana.EncodingBase64,
 				},
 				Executable: true,
-				RentEpoch:  206,
+				RentEpoch:  big.NewInt(206),
 			},
 		},
 	}
@@ -1625,16 +1804,21 @@ func TestClient_GetRecentPerformanceSamples(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getRecentPerformanceSamples",
 			"params": []interface{}{
 				float64(limit),
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1655,13 +1839,18 @@ func TestClient_GetSnapshotSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSnapshotSlot",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1699,9 +1888,14 @@ func TestClient_GetSignaturesForAddress(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSignaturesForAddress",
 			"params": []interface{}{
@@ -1715,7 +1909,7 @@ func TestClient_GetSignaturesForAddress(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1741,9 +1935,14 @@ func TestClient_GetSignatureStatuses(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSignatureStatuses",
 			"params": []interface{}{
@@ -1756,7 +1955,7 @@ func TestClient_GetSignatureStatuses(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1778,9 +1977,14 @@ func TestClient_GetSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSlot",
 			"params": []interface{}{
@@ -1789,7 +1993,7 @@ func TestClient_GetSlot(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1811,9 +2015,14 @@ func TestClient_GetSlotLeader(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSlotLeader",
 			"params": []interface{}{
@@ -1822,7 +2031,7 @@ func TestClient_GetSlotLeader(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1847,9 +2056,14 @@ func TestClient_GetSlotLeaders(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSlotLeaders",
 			"params": []interface{}{
@@ -1857,7 +2071,7 @@ func TestClient_GetSlotLeaders(t *testing.T) {
 				float64(limit),
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1876,9 +2090,14 @@ func TestClient_GetSupply(t *testing.T) {
 	out, err := client.GetSupply(context.Background(), CommitmentFinalized)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSupply",
 			"params": []interface{}{
@@ -1888,7 +2107,7 @@ func TestClient_GetSupply(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1913,9 +2132,14 @@ func TestClient_GetSupply_CommitmentMax(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSupply",
 			"params": []interface{}{
@@ -1925,7 +2149,7 @@ func TestClient_GetSupply_CommitmentMax(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1951,9 +2175,14 @@ func TestClient_GetSupply_ExcludeNonCirculatingAccounts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getSupply",
 			"params": []interface{}{
@@ -1963,7 +2192,7 @@ func TestClient_GetSupply_ExcludeNonCirculatingAccounts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -1989,9 +2218,14 @@ func TestClient_GetTokenLargestAccounts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTokenLargestAccounts",
 			"params": []interface{}{
@@ -2001,7 +2235,7 @@ func TestClient_GetTokenLargestAccounts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2027,9 +2261,14 @@ func TestClient_GetTokenSupply(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTokenSupply",
 			"params": []interface{}{
@@ -2039,7 +2278,7 @@ func TestClient_GetTokenSupply(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2070,9 +2309,14 @@ func TestClient_GetTransaction(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTransaction",
 			"params": []interface{}{
@@ -2084,7 +2328,7 @@ func TestClient_GetTransaction(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	blockTimeSeconds := int64(1624821990)
@@ -2093,7 +2337,7 @@ func TestClient_GetTransaction(t *testing.T) {
 		Slot:      83311386,
 		BlockTime: &blockTime,
 		Transaction: &TransactionResultEnvelope{
-			asParsedTransaction: &CompiledTransaction{
+			asParsedTransaction: &solana.Transaction{
 				Signatures: []solana.Signature{
 					solana.MustSignatureFromBase58("QPzWhnwHnCwk3nj1zVCcjz1VP7EcAKouPg9Joietje3GnQTVQ5XyWxyPC3zHby8K5ahSn9SbQupauDbVRvv5DuL"),
 				},
@@ -2178,9 +2422,14 @@ func TestClient_GetParsedTransaction(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTransaction",
 			"params": []interface{}{
@@ -2191,7 +2440,7 @@ func TestClient_GetParsedTransaction(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	assert.Equal(t, uint64(2), out.Meta.InnerInstructions[0].Index)
@@ -2226,9 +2475,14 @@ func TestClient_GetTransactionCount(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTransactionCount",
 			"params": []interface{}{
@@ -2237,7 +2491,7 @@ func TestClient_GetTransactionCount(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2258,13 +2512,18 @@ func TestClient_GetVersion(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getVersion",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2290,9 +2549,14 @@ func TestClient_GetVoteAccounts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getVoteAccounts",
 			"params": []interface{}{
@@ -2302,7 +2566,7 @@ func TestClient_GetVoteAccounts(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2323,13 +2587,18 @@ func TestClient_MinimumLedgerSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "minimumLedgerSlot",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2357,9 +2626,14 @@ func TestClient_RequestAirdrop(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "requestAirdrop",
 			"params": []interface{}{
@@ -2370,7 +2644,7 @@ func TestClient_RequestAirdrop(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2398,9 +2672,14 @@ func TestClient_GetStakeActivation(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getStakeActivation",
 			"params": []interface{}{
@@ -2411,7 +2690,7 @@ func TestClient_GetStakeActivation(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2437,9 +2716,14 @@ func TestClient_GetTokenAccountBalance(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTokenAccountBalance",
 			"params": []interface{}{
@@ -2449,7 +2733,7 @@ func TestClient_GetTokenAccountBalance(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2484,9 +2768,14 @@ func TestClient_GetTokenAccountsByDelegate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTokenAccountsByDelegate",
 			"params": []interface{}{
@@ -2500,7 +2789,7 @@ func TestClient_GetTokenAccountsByDelegate(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2535,9 +2824,14 @@ func TestClient_GetTokenAccountsByOwner(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getTokenAccountsByOwner",
 			"params": []interface{}{
@@ -2551,7 +2845,7 @@ func TestClient_GetTokenAccountsByOwner(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2561,8 +2855,10 @@ func TestClient_GetTokenAccountsByOwner(t *testing.T) {
 	assert.Equal(t, expected, got, "both deserialized values must be equal")
 }
 
-var encodedTx string = "AfjEs3XhTc3hrxEvlnMPkm/cocvAUbFNbCl00qKnrFue6J53AhEqIFmcJJlJW3EDP5RmcMz+cNTTcZHW/WJYwAcBAAEDO8hh4VddzfcO5jbCt95jryl6y8ff65UcgukHNLWH+UQGgxCGGpgyfQVQV02EQYqm4QwzUt2qf9f1gVLM7rI4hwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6ANIF55zOZWROWRkeh+lExxZBnKFqbvIxZDLE7EijjoBAgIAAQwCAAAAOTAAAAAAAAA="
-var txSignatureString string = "5yUSwqQqeZLEEYKxnG4JC4XhaaBpV3RS4nQbK8bQTyjLX5btVq9A1Ja5nuJzV7Z3Zq8G6EVKFvN4DKUL6PSAxmTk"
+var (
+	encodedTx         string = "AfjEs3XhTc3hrxEvlnMPkm/cocvAUbFNbCl00qKnrFue6J53AhEqIFmcJJlJW3EDP5RmcMz+cNTTcZHW/WJYwAcBAAEDO8hh4VddzfcO5jbCt95jryl6y8ff65UcgukHNLWH+UQGgxCGGpgyfQVQV02EQYqm4QwzUt2qf9f1gVLM7rI4hwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6ANIF55zOZWROWRkeh+lExxZBnKFqbvIxZDLE7EijjoBAgIAAQwCAAAAOTAAAAAAAAA="
+	txSignatureString string = "5yUSwqQqeZLEEYKxnG4JC4XhaaBpV3RS4nQbK8bQTyjLX5btVq9A1Ja5nuJzV7Z3Zq8G6EVKFvN4DKUL6PSAxmTk"
+)
 
 func TestClient_SendTransaction(t *testing.T) {
 	responseBody := fmt.Sprintf(`"%s"`, txSignatureString)
@@ -2640,9 +2936,14 @@ func TestClient_IsBlockhashValid(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "isBlockhashValid",
 			"params": []interface{}{
@@ -2652,7 +2953,7 @@ func TestClient_IsBlockhashValid(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	assert.Equal(t,
@@ -2681,9 +2982,14 @@ func TestClient_GetFeeForMessage(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getFeeForMessage",
 			"params": []interface{}{
@@ -2693,7 +2999,7 @@ func TestClient_GetFeeForMessage(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2714,13 +3020,18 @@ func TestClient_GetHighestSnapshotSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getHighestSnapshotSlot",
 		},
-		server.RequestBody(t),
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))
@@ -2742,9 +3053,14 @@ func TestClient_GetLatestBlockhash(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
 	assert.Equal(t,
 		map[string]interface{}{
-			"id":      float64(0),
+			"id":      any(nil),
 			"jsonrpc": "2.0",
 			"method":  "getLatestBlockhash",
 			"params": []interface{}{
@@ -2753,7 +3069,52 @@ func TestClient_GetLatestBlockhash(t *testing.T) {
 				},
 			},
 		},
-		server.RequestBody(t),
+		reqBody,
+	)
+
+	expected := mustJSONToInterface([]byte(responseBody))
+
+	got := mustJSONToInterface(mustAnyToJSON(out))
+
+	assert.Equal(t, expected, got, "both deserialized values must be equal")
+}
+
+func TestClient_GetRecentPrioritizationFees(t *testing.T) {
+	responseBody := `[ { "slot": 348125, "prioritizationFee": 0 }, { "slot": 348126, "prioritizationFee": 1000 }, { "slot": 348127, "prioritizationFee": 500 } ]`
+	server, closer := mockJSONRPC(t, stdjson.RawMessage(wrapIntoRPC(responseBody)))
+	defer closer()
+
+	client := New(server.URL)
+
+	accounts := []solana.PublicKey{
+		solana.MustPublicKeyFromBase58("41twqNJmPHv8a5AW32if2CcGRcPzaetwErXaNggGWu1q"),
+		solana.MustPublicKeyFromBase58("5U3bH5b6XtG99aVWLqwVzYPVpQiFHytBD68Rz2eFPZd7"),
+	}
+
+	out, err := client.GetRecentPrioritizationFees(
+		context.Background(),
+		accounts,
+	)
+	require.NoError(t, err)
+
+	// the ID is random, so we can't assert it; let's check that it is set, and then remove it
+	reqBody := server.RequestBody(t)
+	assert.NotNil(t, reqBody["id"])
+	reqBody["id"] = any(nil)
+
+	assert.Equal(t,
+		map[string]interface{}{
+			"id":      any(nil),
+			"jsonrpc": "2.0",
+			"method":  "getRecentPrioritizationFees",
+			"params": []interface{}{
+				[]interface{}{
+					accounts[0].String(),
+					accounts[1].String(),
+				},
+			},
+		},
+		reqBody,
 	)
 
 	expected := mustJSONToInterface([]byte(responseBody))

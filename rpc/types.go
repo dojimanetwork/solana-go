@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	stdjson "encoding/json"
 	"fmt"
+	"math/big"
 
 	bin "github.com/gagliardetto/binary"
 
@@ -95,10 +96,33 @@ const (
 )
 
 type TransactionWithMeta struct {
+	// The slot this transaction was processed in.
+	Slot uint64 `json:"slot"`
+
+	// Estimated production time, as Unix timestamp (seconds since the Unix epoch)
+	// of when the transaction was processed.
+	// Nil if not available.
+	BlockTime *solana.UnixTimeSeconds `json:"blockTime" bin:"optional"`
+
 	Transaction *DataBytesOrJSON `json:"transaction"`
+
 	// Transaction status metadata object
 	Meta    *TransactionMeta   `json:"meta,omitempty"`
 	Version TransactionVersion `json:"version"`
+}
+
+func (dt TransactionWithMeta) GetParsedTransaction() (*solana.Transaction, error) {
+	if dt.Transaction == nil {
+		return nil, fmt.Errorf("transaction is nil")
+	}
+	if dt.Transaction.rawDataEncoding != solana.EncodingJSONParsed {
+		return nil, fmt.Errorf("data is not in JSONParsed encoding")
+	}
+	var parsedTransaction solana.Transaction
+	if err := json.Unmarshal(dt.Transaction.asJSON, &parsedTransaction); err != nil {
+		return nil, err
+	}
+	return &parsedTransaction, nil
 }
 
 func (twm TransactionWithMeta) MustGetTransaction() *solana.Transaction {
@@ -119,8 +143,8 @@ func (twm TransactionWithMeta) GetTransaction() (*solana.Transaction, error) {
 }
 
 type TransactionParsed struct {
-	Meta        *TransactionMeta     `json:"meta,omitempty"`
-	Transaction *CompiledTransaction `json:"transaction"`
+	Meta        *TransactionMeta    `json:"meta,omitempty"`
+	Transaction *solana.Transaction `json:"transaction"`
 }
 
 type TokenBalance struct {
@@ -191,6 +215,8 @@ type TransactionMeta struct {
 	Rewards []BlockReward `json:"rewards"`
 
 	LoadedAddresses LoadedAddresses `json:"loadedAddresses"`
+
+	ComputeUnitsConsumed *uint64 `json:"computeUnitsConsumed"`
 }
 
 type InnerInstruction struct {
@@ -199,7 +225,15 @@ type InnerInstruction struct {
 	Index uint16 `json:"index"`
 
 	// Ordered list of inner program instructions that were invoked during a single transaction instruction.
-	Instructions []solana.CompiledInstruction `json:"instructions"`
+	Instructions []CompiledInnerInstruction `json:"instructions"`
+}
+
+type CompiledInnerInstruction struct {
+	solana.CompiledInstruction
+
+	// Invocation stack height of this instruction. Instruction stack height
+	// starts at 1 for transaction instructions.
+	StackHeight uint8 `json:"stackHeight"`
 }
 
 // Ok  interface{} `json:"Ok"`  // <null> Transaction was successful
@@ -231,6 +265,25 @@ type GetAccountInfoResult struct {
 	Value *Account `json:"value"`
 }
 
+// GetBinary returns the binary representation of the account data.
+func (a *GetAccountInfoResult) GetBinary() []byte {
+	if a == nil {
+		return nil
+	}
+	if a.Value == nil {
+		return nil
+	}
+	if a.Value.Data == nil {
+		return nil
+	}
+	return a.Value.Data.GetBinary()
+}
+
+// Bytes returns the binary representation of the account data.
+func (a *GetAccountInfoResult) Bytes() []byte {
+	return a.GetBinary()
+}
+
 type IsValidBlockhashResult struct {
 	RPCContext
 	Value bool `json:"value"` // True if the blockhash is still valid.
@@ -250,7 +303,7 @@ type Account struct {
 	Executable bool `json:"executable"`
 
 	// The epoch at which this account will next owe rent
-	RentEpoch uint64 `json:"rentEpoch"`
+	RentEpoch *big.Int `json:"rentEpoch"`
 }
 
 type DataBytesOrJSON struct {
@@ -313,7 +366,7 @@ func (wrap *DataBytesOrJSON) UnmarshalJSON(data []byte) error {
 			wrap.rawDataEncoding = solana.EncodingJSONParsed
 		}
 	default:
-		return fmt.Errorf("Unknown kind: %v", data)
+		return fmt.Errorf("unknown kind: %v", data)
 	}
 
 	return nil
@@ -399,12 +452,6 @@ const (
 	CommitmentProcessed CommitmentType = "processed"
 )
 
-// Parsed Transaction
-type CompiledTransaction struct {
-	Signatures []solana.Signature `json:"signatures"`
-	Message    solana.Message     `json:"message"`
-}
-
 type ParsedTransaction struct {
 	Signatures []solana.Signature `json:"signatures"`
 	Message    ParsedMessage      `json:"message"`
@@ -459,11 +506,12 @@ type ParsedMessage struct {
 }
 
 type ParsedInstruction struct {
-	Program   string                   `json:"program,omitempty"`
-	ProgramId solana.PublicKey         `json:"programId,omitempty"`
-	Parsed    *InstructionInfoEnvelope `json:"parsed,omitempty"`
-	Data      solana.Base58            `json:"data,omitempty"`
-	Accounts  []solana.PublicKey       `json:"accounts,omitempty"`
+	Program     string                   `json:"program,omitempty"`
+	ProgramId   solana.PublicKey         `json:"programId,omitempty"`
+	Parsed      *InstructionInfoEnvelope `json:"parsed,omitempty"`
+	Data        solana.Base58            `json:"data,omitempty"`
+	Accounts    []solana.PublicKey       `json:"accounts,omitempty"`
+	StackHeight int                      `json:"stackHeight"`
 }
 
 type InstructionInfoEnvelope struct {

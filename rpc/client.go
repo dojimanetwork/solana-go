@@ -29,8 +29,10 @@ import (
 	"github.com/klauspost/compress/gzhttp"
 )
 
-var ErrNotFound = errors.New("not found")
-var ErrNotConfirmed = errors.New("not confirmed")
+var (
+	ErrNotFound     = errors.New("not found")
+	ErrNotConfirmed = errors.New("not confirmed")
+)
 
 type Client struct {
 	rpcURL    string
@@ -40,6 +42,7 @@ type Client struct {
 type JSONRPCClient interface {
 	CallForInto(ctx context.Context, out interface{}, method string, params []interface{}) error
 	CallWithCallback(ctx context.Context, method string, params []interface{}, callback func(*http.Request, *http.Response) error) error
+	CallBatch(ctx context.Context, requests jsonrpc.RPCRequests) (jsonrpc.RPCResponses, error)
 }
 
 // New creates a new Solana JSON RPC client.
@@ -130,4 +133,19 @@ func (cl *Client) RPCCallWithCallback(
 	callback func(*http.Request, *http.Response) error,
 ) error {
 	return cl.rpcClient.CallWithCallback(ctx, method, params, callback)
+}
+
+func (cl *Client) RPCCallBatch(
+	ctx context.Context,
+	requests jsonrpc.RPCRequests,
+) (jsonrpc.RPCResponses, error) {
+	return cl.rpcClient.CallBatch(ctx, requests)
+}
+
+func NewBoolean(b bool) *bool {
+	return &b
+}
+
+func NewTransactionVersion(v uint64) *uint64 {
+	return &v
 }

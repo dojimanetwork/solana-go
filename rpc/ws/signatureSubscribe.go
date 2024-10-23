@@ -69,7 +69,10 @@ type SignatureSubscription struct {
 
 func (sw *SignatureSubscription) Recv() (*SignatureResult, error) {
 	select {
-	case d := <-sw.sub.stream:
+	case d, ok := <-sw.sub.stream:
+		if !ok {
+			return nil, ErrSubscriptionClosed
+		}
 		return d.(*SignatureResult), nil
 	case err := <-sw.sub.err:
 		return nil, err
@@ -81,19 +84,16 @@ func (sw *SignatureSubscription) Err() <-chan error {
 }
 
 func (sw *SignatureSubscription) Response() <-chan *SignatureResult {
-	ch := make(chan *SignatureResult)
-	go func(chan *SignatureResult) {
-		for {
-			select {
-			case d := <-sw.sub.stream:
-				ch <- d.(*SignatureResult)
-			case err := <-sw.sub.err:
-				close(ch)
-				panic(err)
-			}
+	typedChan := make(chan *SignatureResult, 1)
+	go func(ch chan *SignatureResult) {
+		// TODO: will this subscription yield more than one result?
+		d, ok := <-sw.sub.stream
+		if !ok {
+			return
 		}
-	}(ch)
-	return ch
+		ch <- d.(*SignatureResult)
+	}(typedChan)
+	return typedChan
 }
 
 var ErrTimeout = fmt.Errorf("timeout waiting for confirmation")

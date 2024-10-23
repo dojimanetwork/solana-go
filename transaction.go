@@ -25,9 +25,11 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
-	"github.com/gagliardetto/solana-go/text"
 	"github.com/gagliardetto/treeout"
+	"github.com/mr-tron/base58"
 	"go.uber.org/zap"
+
+	"github.com/gagliardetto/solana-go/text"
 )
 
 type Transaction struct {
@@ -52,12 +54,28 @@ func (tx *Transaction) UnmarshalBase64(b64 string) error {
 
 var _ bin.EncoderDecoder = &Transaction{}
 
-func (t *Transaction) HasAccount(account PublicKey) bool     { return t.Message.HasAccount(account) }
-func (t *Transaction) IsSigner(account PublicKey) bool       { return t.Message.IsSigner(account) }
-func (t *Transaction) IsWritable(account PublicKey) bool     { return t.Message.IsWritable(account) }
-func (t *Transaction) AccountMetaList() (out []*AccountMeta) { return t.Message.AccountMetaList() }
+func (t *Transaction) HasAccount(account PublicKey) (bool, error) {
+	return t.Message.HasAccount(account)
+}
+
+func (t *Transaction) IsSigner(account PublicKey) bool {
+	return t.Message.IsSigner(account)
+}
+
+func (t *Transaction) IsWritable(account PublicKey) (bool, error) {
+	return t.Message.IsWritable(account)
+}
+
+func (t *Transaction) AccountMetaList() ([]*AccountMeta, error) {
+	return t.Message.AccountMetaList()
+}
+
 func (t *Transaction) ResolveProgramIDIndex(programIDIndex uint16) (PublicKey, error) {
 	return t.Message.ResolveProgramIDIndex(programIDIndex)
+}
+
+func (t *Transaction) GetAccountIndex(account PublicKey) (uint16, error) {
+	return t.Message.GetAccountIndex(account)
 }
 
 // TransactionFromDecoder decodes a transaction from a decoder.
@@ -70,6 +88,27 @@ func TransactionFromDecoder(decoder *bin.Decoder) (*Transaction, error) {
 	return out, nil
 }
 
+func TransactionFromBytes(data []byte) (*Transaction, error) {
+	decoder := bin.NewBinDecoder(data)
+	return TransactionFromDecoder(decoder)
+}
+
+func TransactionFromBase64(b64 string) (*Transaction, error) {
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil, err
+	}
+	return TransactionFromBytes(data)
+}
+
+func TransactionFromBase58(b58 string) (*Transaction, error) {
+	data, err := base58.Decode(b58)
+	if err != nil {
+		return nil, err
+	}
+	return TransactionFromBytes(data)
+}
+
 // MustTransactionFromDecoder decodes a transaction from a decoder.
 // Panics on error.
 func MustTransactionFromDecoder(decoder *bin.Decoder) *Transaction {
@@ -80,6 +119,11 @@ func MustTransactionFromDecoder(decoder *bin.Decoder) *Transaction {
 	return out
 }
 
+const (
+	AccountsTypeIndex = "Fee"
+	AccountsTypeKey   = "Key"
+)
+
 type CompiledInstruction struct {
 	// Index into the message.accountKeys array indicating the program account that executes this instruction.
 	// NOTE: it is actually a uint8, but using a uint16 because uint8 is treated as a byte everywhere,
@@ -89,19 +133,81 @@ type CompiledInstruction struct {
 	// List of ordered indices into the message.accountKeys array indicating which accounts to pass to the program.
 	// NOTE: it is actually a []uint8, but using a uint16 because []uint8 is treated as a []byte everywhere,
 	// and that can be an issue.
+	AccountsWithKey []PublicKey `json:"omitempty"`
+	//
 	Accounts []uint16 `json:"accounts"`
 
 	// The program input data encoded in a base-58 string.
 	Data Base58 `json:"data"`
+
+	//
+	StackHeight int `json:"stackHeight"`
 }
 
-func (ci *CompiledInstruction) ResolveInstructionAccounts(message *Message) []*AccountMeta {
+type compiledInstruction struct {
+	// Index into the message.accountKeys array indicating the program account that executes this instruction.
+	// NOTE: it is actually a uint8, but using a uint16 because uint8 is treated as a byte everywhere,
+	// and that can be an issue.
+	ProgramIDIndex uint16 `json:"programIdIndex"`
+
+	// List of ordered indices into the message.accountKeys array indicating which accounts to pass to the program.
+	// NOTE: it is actually a []uint8, but using a uint16 because []uint8 is treated as a []byte everywhere,
+	// and that can be an issue.
+	Accounts []interface{} `json:"accounts"`
+
+	// The program input data encoded in a base-58 string.
+	Data Base58 `json:"data"`
+
+	//
+	StackHeight int `json:"stackHeight"`
+}
+
+func (ci *CompiledInstruction) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ci)
+}
+
+func (ci *CompiledInstruction) UnmarshalJSON(data []byte) error {
+	in := compiledInstruction{}
+	err := json.Unmarshal(data, &in)
+	if err != nil {
+		return err
+	}
+	//
+	ci.ProgramIDIndex = in.ProgramIDIndex
+	ci.Data = in.Data
+	ci.StackHeight = in.StackHeight
+	ci.Accounts = make([]uint16, 0)
+	if len(in.Accounts) == 0 {
+		return nil
+	}
+	_, ok := in.Accounts[0].(string)
+	if ok {
+		accountsWithKey := make([]PublicKey, len(in.Accounts))
+		for i, item := range in.Accounts {
+			accountsWithKey[i] = MustPublicKeyFromBase58(item.(string))
+		}
+		ci.AccountsWithKey = accountsWithKey
+	} else {
+		AccountsWithIndex := make([]uint16, len(in.Accounts))
+		for i, item := range in.Accounts {
+			AccountsWithIndex[i] = uint16(item.(float64))
+		}
+		ci.Accounts = AccountsWithIndex
+	}
+	return nil
+}
+
+func (ci *CompiledInstruction) ResolveInstructionAccounts(message *Message) ([]*AccountMeta, error) {
 	out := make([]*AccountMeta, len(ci.Accounts))
-	metas := message.AccountMetaList()
+	metas, err := message.AccountMetaList()
+	if err != nil {
+		return nil, err
+	}
 	for i, acct := range ci.Accounts {
 		out[i] = metas[acct]
 	}
-	return out
+
+	return out, nil
 }
 
 type Instruction interface {
@@ -115,7 +221,8 @@ type TransactionOption interface {
 }
 
 type transactionOptions struct {
-	payer PublicKey
+	payer         PublicKey
+	addressTables map[PublicKey]PublicKeySlice // [tablePubkey]addresses
 }
 
 type transactionOptionFunc func(opts *transactionOptions)
@@ -126,6 +233,10 @@ func (f transactionOptionFunc) apply(opts *transactionOptions) {
 
 func TransactionPayer(payer PublicKey) TransactionOption {
 	return transactionOptionFunc(func(opts *transactionOptions) { opts.payer = payer })
+}
+
+func TransactionAddressTables(tables map[PublicKey]PublicKeySlice) TransactionOption {
+	return transactionOptionFunc(func(opts *transactionOptions) { opts.addressTables = tables })
 }
 
 var debugNewTransaction = false
@@ -175,6 +286,11 @@ func (builder *TransactionBuilder) Build() (*Transaction, error) {
 	)
 }
 
+type addressTablePubkeyWithIndex struct {
+	addressTable PublicKey
+	index        uint8
+}
+
 func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...TransactionOption) (*Transaction, error) {
 	if len(instructions) == 0 {
 		return nil, fmt.Errorf("requires at-least one instruction to create a transaction")
@@ -200,6 +316,25 @@ func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...Tr
 		}
 	}
 
+	addressLookupKeysMap := make(map[PublicKey]addressTablePubkeyWithIndex) // all accounts from tables as map
+	for addressTablePubKey, addressTable := range options.addressTables {
+		if len(addressTable) > 256 {
+			return nil, fmt.Errorf("max lookup table index exceeded for %s table", addressTablePubKey)
+		}
+
+		for i, address := range addressTable {
+			_, ok := addressLookupKeysMap[address]
+			if ok {
+				continue
+			}
+
+			addressLookupKeysMap[address] = addressTablePubkeyWithIndex{
+				addressTable: addressTablePubKey,
+				index:        uint8(i),
+			}
+		}
+	}
+
 	programIDs := make(PublicKeySlice, 0)
 	accounts := []*AccountMeta{}
 	for _, instruction := range instructions {
@@ -207,6 +342,8 @@ func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...Tr
 		programIDs.UniqueAppend(instruction.ProgramID())
 	}
 
+	// for IsInvoked check
+	programIDsMap := make(map[PublicKey]struct{}, len(programIDs))
 	// Add programID to the account list
 	for _, programID := range programIDs {
 		accounts = append(accounts, &AccountMeta{
@@ -214,6 +351,8 @@ func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...Tr
 			IsSigner:   false,
 			IsWritable: false,
 		})
+
+		programIDsMap[programID] = struct{}{}
 	}
 
 	// Sort. Prioritizing first by signer, then by writable
@@ -251,17 +390,17 @@ func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...Tr
 		// fee payer is not part of accounts we want to add it
 		accountCount++
 	}
-	finalAccounts := make([]*AccountMeta, accountCount)
+	allKeys := make([]*AccountMeta, accountCount)
 
 	itr := 1
 	for idx, uniqAccount := range uniqAccounts {
 		if idx == feePayerIndex {
 			uniqAccount.IsSigner = true
 			uniqAccount.IsWritable = true
-			finalAccounts[0] = uniqAccount
+			allKeys[0] = uniqAccount
 			continue
 		}
-		finalAccounts[itr] = uniqAccount
+		allKeys[itr] = uniqAccount
 		itr++
 	}
 
@@ -272,14 +411,20 @@ func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...Tr
 			IsSigner:   true,
 			IsWritable: true,
 		}
-		finalAccounts[0] = feePayerAccount
+		allKeys[0] = feePayerAccount
 	}
 
 	message := Message{
 		RecentBlockhash: recentBlockHash,
 	}
-	accountKeyIndex := map[string]uint16{}
-	for idx, acc := range finalAccounts {
+	lookupsMap := make(map[PublicKey]struct { // extended MessageAddressTableLookup
+		AccountKey      PublicKey // The account key of the address table.
+		WritableIndexes []uint8
+		Writable        []PublicKey
+		ReadonlyIndexes []uint8
+		Readonly        []PublicKey
+	})
+	for idx, acc := range allKeys {
 
 		if debugNewTransaction {
 			zlog.Debug("transaction account",
@@ -288,8 +433,25 @@ func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...Tr
 			)
 		}
 
+		addressLookupKeyEntry, isPresentedInTables := addressLookupKeysMap[acc.PublicKey]
+		_, isInvoked := programIDsMap[acc.PublicKey]
+		// skip fee payer
+		if isPresentedInTables && idx != 0 && !acc.IsSigner && !isInvoked {
+			lookup := lookupsMap[addressLookupKeyEntry.addressTable]
+			if acc.IsWritable {
+				lookup.WritableIndexes = append(lookup.WritableIndexes, addressLookupKeyEntry.index)
+				lookup.Writable = append(lookup.Writable, acc.PublicKey)
+			} else {
+				lookup.ReadonlyIndexes = append(lookup.ReadonlyIndexes, addressLookupKeyEntry.index)
+				lookup.Readonly = append(lookup.Readonly, acc.PublicKey)
+			}
+
+			lookupsMap[addressLookupKeyEntry.addressTable] = lookup
+			continue // prevent changing message.Header properties
+		}
+
 		message.AccountKeys = append(message.AccountKeys, acc.PublicKey)
-		accountKeyIndex[acc.PublicKey.String()] = uint16(idx)
+
 		if acc.IsSigner {
 			message.Header.NumRequiredSignatures++
 			if !acc.IsWritable {
@@ -302,6 +464,46 @@ func NewTransaction(instructions []Instruction, recentBlockHash Hash, opts ...Tr
 			message.Header.NumReadonlyUnsignedAccounts++
 		}
 	}
+
+	var lookupsWritableKeys []PublicKey
+	var lookupsReadOnlyKeys []PublicKey
+	if len(lookupsMap) > 0 {
+		lookups := make([]MessageAddressTableLookup, 0, len(lookupsMap))
+
+		for tablePubKey, l := range lookupsMap {
+			lookupsWritableKeys = append(lookupsWritableKeys, l.Writable...)
+			lookupsReadOnlyKeys = append(lookupsReadOnlyKeys, l.Readonly...)
+
+			lookups = append(lookups, MessageAddressTableLookup{
+				AccountKey:      tablePubKey,
+				WritableIndexes: l.WritableIndexes,
+				ReadonlyIndexes: l.ReadonlyIndexes,
+			})
+		}
+
+		// prevent error created in ResolveLookups
+		err := message.SetAddressTables(options.addressTables)
+		if err != nil {
+			return nil, fmt.Errorf("SetAddressTables: %s", err)
+		}
+		message.SetAddressTableLookups(lookups)
+	}
+
+	var idx uint16
+	accountKeyIndex := make(map[string]uint16, len(message.AccountKeys)+len(lookupsWritableKeys)+len(lookupsReadOnlyKeys))
+	for _, acc := range message.AccountKeys {
+		accountKeyIndex[acc.String()] = idx
+		idx++
+	}
+	for _, acc := range lookupsWritableKeys {
+		accountKeyIndex[acc.String()] = idx
+		idx++
+	}
+	for _, acc := range lookupsReadOnlyKeys {
+		accountKeyIndex[acc.String()] = idx
+		idx++
+	}
+
 	if debugNewTransaction {
 		zlog.Debug("message header compiled",
 			zap.Uint8("num_required_signatures", message.Header.NumRequiredSignatures),
@@ -366,6 +568,9 @@ func (tx *Transaction) UnmarshalWithDecoder(decoder *bin.Decoder) (err error) {
 		if err != nil {
 			return fmt.Errorf("unable to read numSignatures: %w", err)
 		}
+		if numSignatures < 0 {
+			return fmt.Errorf("numSignatures is negative")
+		}
 		if numSignatures > decoder.Remaining()/64 {
 			return fmt.Errorf("numSignatures %d is too large for remaining bytes %d", numSignatures, decoder.Remaining())
 		}
@@ -394,18 +599,26 @@ func (tx *Transaction) PartialSign(getter privateKeyGetter) (out []Signature, er
 	}
 	signerKeys := tx.Message.signerKeys()
 
-	signedSignatures := []Signature{}
-	for _, key := range signerKeys {
+	// Ensure that the transaction has the correct number of signatures initialized
+	if len(tx.Signatures) == 0 {
+		// Initialize the Signatures slice to the correct length if it's empty
+		tx.Signatures = make([]Signature, len(signerKeys))
+	} else if len(tx.Signatures) != len(signerKeys) {
+		// Return an error if the current length of the Signatures slice doesn't match the expected number
+		return nil, fmt.Errorf("invalid signatures length, expected %d, actual %d", len(signerKeys), len(tx.Signatures))
+	}
+
+	for i, key := range signerKeys {
 		privateKey := getter(key)
 		if privateKey != nil {
 			s, err := privateKey.Sign(messageContent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to signed with key %q: %w", key.String(), err)
 			}
-			signedSignatures = append(signedSignatures, s)
+			// Directly assign the signature to the corresponding position in the transaction's signature slice
+			tx.Signatures[i] = s
 		}
 	}
-	tx.Signatures = append(tx.Signatures, signedSignatures...)
 	return tx.Signatures, nil
 }
 
@@ -469,7 +682,11 @@ func (tx *Transaction) EncodeToTree(parent treeout.Branches) {
 
 			progKey, err := tx.ResolveProgramIDIndex(inst.ProgramIDIndex)
 			if err == nil {
-				accounts := inst.ResolveInstructionAccounts(&tx.Message)
+				accounts, err := inst.ResolveInstructionAccounts(&tx.Message)
+				if err != nil {
+					message.Child(fmt.Sprintf(text.RedBG("cannot ResolveInstructionAccounts: %s"), err))
+					return
+				}
 				decodedInstruction, err := DecodeInstruction(progKey, accounts, inst.Data)
 				if err == nil {
 					if enToTree, ok := decodedInstruction.(text.EncodableToTree); ok {
@@ -551,4 +768,95 @@ func (tx *Transaction) VerifySignatures() error {
 	}
 
 	return nil
+}
+
+func (tx *Transaction) GetProgramIDs() (PublicKeySlice, error) {
+	programIDs := make(PublicKeySlice, 0)
+	for ixi, inst := range tx.Message.Instructions {
+		progKey, err := tx.ResolveProgramIDIndex(inst.ProgramIDIndex)
+		if err == nil {
+			programIDs = append(programIDs, progKey)
+		} else {
+			return nil, fmt.Errorf("cannot resolve program ID for instruction %d: %w", ixi, err)
+		}
+	}
+	return programIDs, nil
+}
+
+func (tx *Transaction) NumWriteableAccounts() int {
+	return countWriteableAccounts(tx)
+}
+
+func (tx *Transaction) NumSigners() int {
+	return countSigners(tx)
+}
+
+func countSigners(tx *Transaction) (count int) {
+	if tx == nil {
+		return -1
+	}
+	return tx.Message.Signers().Len()
+}
+
+func (tx *Transaction) NumReadonlyAccounts() int {
+	return countReadonlyAccounts(tx)
+}
+
+func countReadonlyAccounts(tx *Transaction) (count int) {
+	if tx == nil {
+		return -1
+	}
+	return int(tx.Message.Header.NumReadonlyUnsignedAccounts) + int(tx.Message.Header.NumReadonlySignedAccounts)
+}
+
+func countWriteableAccounts(tx *Transaction) (count int) {
+	if tx == nil {
+		return -1
+	}
+	if !tx.Message.IsVersioned() {
+		metas, err := tx.Message.AccountMetaList()
+		if err != nil {
+			return -1
+		}
+		for _, meta := range metas {
+			if meta.IsWritable {
+				count++
+			}
+		}
+		return count
+	}
+	numStatisKeys := len(tx.Message.AccountKeys)
+	statisKeys := tx.Message.AccountKeys
+	h := tx.Message.Header
+	for _, key := range statisKeys {
+		accIndex, ok := getStaticAccountIndex(tx, key)
+		if !ok {
+			continue
+		}
+		index := int(accIndex)
+		is := false
+		if index >= int(h.NumRequiredSignatures) {
+			// unsignedAccountIndex < numWritableUnsignedAccounts
+			is = index-int(h.NumRequiredSignatures) < (numStatisKeys-int(h.NumRequiredSignatures))-int(h.NumReadonlyUnsignedAccounts)
+		} else {
+			is = index < int(h.NumRequiredSignatures-h.NumReadonlySignedAccounts)
+		}
+		if is {
+			count++
+		}
+	}
+	if tx.Message.IsResolved() {
+		return count
+	}
+	count += tx.Message.NumWritableLookups()
+	return count
+}
+
+func getStaticAccountIndex(tx *Transaction, key PublicKey) (int, bool) {
+	for idx, a := range tx.Message.AccountKeys {
+		if a.Equals(key) {
+			return (idx), true
+		}
+	}
+	return -1, false
 }

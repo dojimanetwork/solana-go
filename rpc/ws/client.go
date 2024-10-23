@@ -19,6 +19,7 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,15 +33,20 @@ import (
 	"go.uber.org/zap"
 )
 
+var ErrSubscriptionClosed = errors.New("subscription closed")
+
 type result interface{}
 
 type Client struct {
 	rpcURL                  string
 	conn                    *websocket.Conn
+	connCtx                 context.Context
+	connCtxCancel           context.CancelFunc
 	lock                    sync.RWMutex
 	subscriptionByRequestID map[uint64]*Subscription
 	subscriptionByWSSubID   map[uint64]*Subscription
 	reconnectOnErr          bool
+	shortID                 bool
 }
 
 const (
@@ -70,25 +76,43 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (
 
 	dialer := &websocket.Dialer{
 		Proxy:             http.ProxyFromEnvironment,
-		HandshakeTimeout:  45 * time.Second,
+		HandshakeTimeout:  DefaultHandshakeTimeout,
 		EnableCompression: true,
+	}
+
+	if opt != nil && opt.ShortID {
+		c.shortID = opt.ShortID
+	}
+
+	if opt != nil && opt.HandshakeTimeout > 0 {
+		dialer.HandshakeTimeout = opt.HandshakeTimeout
 	}
 
 	var httpHeader http.Header = nil
 	if opt != nil && opt.HttpHeader != nil && len(opt.HttpHeader) > 0 {
 		httpHeader = opt.HttpHeader
 	}
-	c.conn, _, err = dialer.DialContext(ctx, rpcEndpoint, httpHeader)
+	var resp *http.Response
+	c.conn, resp, err = dialer.DialContext(ctx, rpcEndpoint, httpHeader)
 	if err != nil {
-		return nil, fmt.Errorf("new ws client: dial: %w", err)
+		if resp != nil {
+			body, _ := io.ReadAll(resp.Body)
+			err = fmt.Errorf("new ws client: dial: %w, status: %s, body: %q", err, resp.Status, string(body))
+		} else {
+			err = fmt.Errorf("new ws client: dial: %w", err)
+		}
+		return nil, err
 	}
 
+	c.connCtx, c.connCtxCancel = context.WithCancel(context.Background())
 	go func() {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 		ticker := time.NewTicker(pingPeriod)
 		for {
 			select {
+			case <-c.connCtx.Done():
+				return
 			case <-ticker.C:
 				c.sendPing()
 			}
@@ -111,17 +135,23 @@ func (c *Client) sendPing() {
 func (c *Client) Close() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	c.connCtxCancel()
 	c.conn.Close()
 }
 
 func (c *Client) receiveMessages() {
 	for {
-		_, message, err := c.conn.ReadMessage()
-		if err != nil {
-			c.closeAllSubscription(err)
+		select {
+		case <-c.connCtx.Done():
 			return
+		default:
+			_, message, err := c.conn.ReadMessage()
+			if err != nil {
+				c.closeAllSubscription(err)
+				return
+			}
+			c.handleMessage(message)
 		}
-		c.handleMessage(message)
 	}
 }
 
@@ -224,7 +254,9 @@ func (c *Client) handleSubscriptionMessage(subID uint64, message []byte) {
 		return
 	}
 
-	sub.stream <- result
+	if !sub.closed {
+		sub.stream <- result
+	}
 	return
 }
 
@@ -263,7 +295,7 @@ func (c *Client) closeSubscription(reqID uint64, err error) {
 }
 
 func (c *Client) unsubscribe(subID uint64, method string) error {
-	req := newRequest([]interface{}{subID}, method, nil)
+	req := newRequest([]interface{}{subID}, method, nil, c.shortID)
 	data, err := req.encode()
 	if err != nil {
 		return fmt.Errorf("unable to encode unsubscription message for subID %d and method %s", subID, method)
@@ -287,7 +319,7 @@ func (c *Client) subscribe(
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	req := newRequest(params, subscriptionMethod, conf)
+	req := newRequest(params, subscriptionMethod, conf, c.shortID)
 	data, err := req.encode()
 	if err != nil {
 		return nil, fmt.Errorf("subscribe: unable to encode subsciption request: %w", err)
@@ -309,6 +341,7 @@ func (c *Client) subscribe(
 	c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	err = c.conn.WriteMessage(websocket.TextMessage, data)
 	if err != nil {
+		delete(c.subscriptionByRequestID, req.ID)
 		return nil, fmt.Errorf("unable to write request: %w", err)
 	}
 

@@ -31,6 +31,8 @@ import (
 
 	"filippo.io/edwards25519"
 	"github.com/mr-tron/base58"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
 
 type PrivateKey []byte
@@ -180,8 +182,56 @@ func (p *PublicKey) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+// MarshalBSON implements the bson.Marshaler interface.
+func (p PublicKey) MarshalBSON() ([]byte, error) {
+	return bson.Marshal(p.String())
+}
+
+// UnmarshalBSON implements the bson.Unmarshaler interface.
+func (p *PublicKey) UnmarshalBSON(data []byte) (err error) {
+	var s string
+	if err := bson.Unmarshal(data, &s); err != nil {
+		return err
+	}
+
+	*p, err = PublicKeyFromBase58(s)
+	if err != nil {
+		return fmt.Errorf("invalid public key %q: %w", s, err)
+	}
+	return nil
+}
+
+// MarshalBSONValue implements the bson.ValueMarshaler interface.
+func (p PublicKey) MarshalBSONValue() (bsontype.Type, []byte, error) {
+	return bson.MarshalValue(p.String())
+}
+
+// UnmarshalBSONValue implements the bson.ValueUnmarshaler interface.
+func (p *PublicKey) UnmarshalBSONValue(t bsontype.Type, data []byte) (err error) {
+	var s string
+	if err := bson.UnmarshalValue(t, data, &s); err != nil {
+		return err
+	}
+
+	*p, err = PublicKeyFromBase58(s)
+	if err != nil {
+		return fmt.Errorf("invalid public key %q: %w", s, err)
+	}
+	return nil
+}
+
 func (p PublicKey) Equals(pb PublicKey) bool {
 	return p == pb
+}
+
+// IsAnyOf checks if p is equals to any of the provided keys.
+func (p PublicKey) IsAnyOf(keys ...PublicKey) bool {
+	for _, k := range keys {
+		if p.Equals(k) {
+			return true
+		}
+	}
+	return false
 }
 
 // ToPointer returns a pointer to the pubkey.
@@ -283,7 +333,7 @@ func (slice PublicKeySlice) Sort() {
 // Dedupe returns a new slice with all duplicate pubkeys removed.
 func (slice PublicKeySlice) Dedupe() PublicKeySlice {
 	slice.Sort()
-	var deduped PublicKeySlice
+	deduped := make(PublicKeySlice, 0)
 	for i := 0; i < len(slice); i++ {
 		if i == 0 || !slice[i].Equals(slice[i-1]) {
 			deduped = append(deduped, slice[i])
@@ -313,7 +363,7 @@ func (slice PublicKeySlice) ContainsAll(pubkeys PublicKeySlice) bool {
 }
 
 // ContainsAny returns true if any of the provided pubkeys are present in the slice.
-func (slice PublicKeySlice) ContainsAny(pubkeys PublicKeySlice) bool {
+func (slice PublicKeySlice) ContainsAny(pubkeys ...PublicKey) bool {
 	for _, pubkey := range pubkeys {
 		if slice.Contains(pubkey) {
 			return true
@@ -443,6 +493,10 @@ func (slice PublicKeySlice) First() *PublicKey {
 	return slice[0].ToPointer()
 }
 
+// GetAddedRemoved compares to the `next` pubkey slice, and returns
+// two slices:
+// - `added` is the slice of pubkeys that are present in `next` but NOT present in `previous`.
+// - `removed` is the slice of pubkeys that are present in `previous` but are NOT present in `next`.
 func (prev PublicKeySlice) GetAddedRemoved(next PublicKeySlice) (added PublicKeySlice, removed PublicKeySlice) {
 	return next.Removed(prev), prev.Removed(next)
 }
@@ -513,7 +567,7 @@ const (
 // Ported from https://github.com/solana-labs/solana/blob/216983c50e0a618facc39aa07472ba6d23f1b33a/sdk/program/src/pubkey.rs#L159
 func CreateWithSeed(base PublicKey, seed string, owner PublicKey) (PublicKey, error) {
 	if len(seed) > MaxSeedLength {
-		return PublicKey{}, errors.New("Max seed length exceeded")
+		return PublicKey{}, ErrMaxSeedLengthExceeded
 	}
 
 	// let owner = owner.as_ref();
@@ -534,7 +588,7 @@ func CreateWithSeed(base PublicKey, seed string, owner PublicKey) (PublicKey, er
 
 const PDA_MARKER = "ProgramDerivedAddress"
 
-var ErrMaxSeedLengthExceeded = errors.New("Max seed length exceeded")
+var ErrMaxSeedLengthExceeded = errors.New("max seed length exceeded")
 
 // Create a program address.
 // Ported from https://github.com/solana-labs/solana/blob/216983c50e0a618facc39aa07472ba6d23f1b33a/sdk/program/src/pubkey.rs#L204
