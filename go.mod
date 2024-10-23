@@ -1,4 +1,4 @@
-module github.com/dojimanetwork/solana-go/v2
+module github.com/dojimanetwork/solana-go
 
 go 1.19
 
