@@ -22,11 +22,11 @@ import (
 	"log"
 	"os"
 
+	"github.com/dojimanetwork/solana-go"
+	"github.com/dojimanetwork/solana-go/programs/token"
+	"github.com/dojimanetwork/solana-go/rpc"
+	"github.com/dojimanetwork/solana-go/text"
 	bin "github.com/gagliardetto/binary"
-	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/programs/token"
-	"github.com/gagliardetto/solana-go/rpc"
-	"github.com/gagliardetto/solana-go/text"
 	"github.com/spf13/cobra"
 )
 
